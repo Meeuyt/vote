@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>在线投票系统</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f0f2f5; padding: 20px; min-height: 100vh; }
+.container { max-width: 700px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 30px; }
+h1 { text-align: center; color: #1a73e8; margin-bottom: 25px; font-size: 28px; }
+
+.setup-section, .vote-section, .result-section { display: none; }
+.setup-section.active, .vote-section.active, .result-section.active { display: block; }
+
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 6px; color: #333; font-weight: 500; font-size: 15px; }
+input[type="text"], textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid #d0d5dd; border-radius: 8px;
+  font-size: 14px; transition: border-color 0.2s; outline: none;
+}
+input[type="text"]:focus, textarea:focus { border-color: #1a73e8; }
+textarea { resize: vertical; min-height: 80px; }
+
+.option-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+.option-row input[type="text"] { flex: 1; }
+.btn-remove {
+  background: #dc3545; color: #fff; border: none; padding: 8px 14px; border-radius: 6px;
+  cursor: pointer; font-size: 13px;
+}
+.btn-remove:hover { background: #c82333; }
+
+.btn {
+  display: inline-block; padding: 10px 20px; border: none; border-radius: 8px;
+  cursor: pointer; font-size: 14px; font-weight: 500; transition: background 0.2s, transform 0.1s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: #1a73e8; color: #fff; }
+.btn-primary:hover { background: #1557b0; }
+.btn-success { background: #28a745; color: #fff; }
+.btn-success:hover { background: #218838; }
+.btn-secondary { background: #6c757d; color: #fff; }
+.btn-secondary:hover { background: #5a6268; }
+.btn-group { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+.vote-option {
+  display: flex; align-items: center; padding: 14px 16px; margin-bottom: 10px;
+  border: 2px solid #e1e5eb; border-radius: 10px; cursor: pointer; transition: all 0.2s;
+  background: #fafbfc;
+}
+.vote-option:hover { border-color: #1a73e8; background: #f0f5ff; }
+.vote-option input[type="radio"] { width: 20px; height: 20px; margin-right: 12px; accent-color: #1a73e8; }
+.vote-option.selected { border-color: #1a73e8; background: #e8f0fe; }
+
+.result-bar { margin-bottom: 14px; }
+.result-label { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 14px; color: #333; }
+.bar-bg { height: 24px; background: #e8eaed; border-radius: 12px; overflow: hidden; }
+.bar-fill { height: 100%; background: linear-gradient(90deg, #1a73e8, #4285f4); border-radius: 12px; transition: width 0.6s ease; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: #fff; font-size: 12px; font-weight: 500; }
+.bar-fill.light-text { color: #fff; }
+.bar-fill.dark-text { color: #333; }
+
+.highlight { animation: pulse 0.5s ease; }
+@keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.02); } }
+
+.total-votes { text-align: center; margin: 20px 0; color: #666; font-size: 14px; }
+
+.tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #e1e5eb; }
+.tab { padding: 8px 16px; cursor: pointer; border: none; background: none; font-size: 14px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 500; }
+
+.alert {
+  background: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 12px 16px;
+  border-radius: 8px; margin-bottom: 15px; font-size: 14px;
+}
+.alert-error { background: #f8d7da; border-color: #dc3545; color: #721c24; }
+
+.empty-state { text-align: center; padding: 40px 20px; color: #999; }
+.empty-state .icon { font-size: 48px; margin-bottom: 10px; }
+
+@media (max-width: 500px) {
+  .container { padding: 20px 15px; }
+  h1 { font-size: 22px; }
+  .btn-group { flex-direction: column; }
+  .btn-group .btn { width: 100%; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🗳️ 在线投票系统</h1>
+
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('create')">创建投票</button>
+    <button class="tab" onclick="showTab('vote')">参与投票</button>
+    <button class="tab" onclick="showTab('results')">投票结果</button>
+  </div>
+
+  <!-- 创建投票 -->
+  <div id="create-tab" class="setup-section active">
+    <div class="form-group">
+      <label for="pollQuestion">投票问题</label>
+      <input type="text" id="pollQuestion" placeholder="例如：你最喜欢的编程语言是？">
+    </div>
+    <div class="form-group">
+      <label>选项</label>
+      <div id="optionsList">
+        <div class="option-row"><input type="text" placeholder="选项 1" class="option-input"></div>
+        <div class="option-row"><input type="text" placeholder="选项 2" class="option-input"></div>
+      </div>
+      <button class="btn btn-secondary" onclick="addOption()" style="margin-top:8px;">+ 添加选项</button>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="createPoll()">✅ 创建投票</button>
+    </div>
+  </div>
+
+  <!-- 参与投票 -->
+  <div id="vote-tab" class="vote-section">
+    <div id="pollDisplay"></div>
+    <div id="voteAlert"></div>
+    <div class="btn-group">
+      <button class="btn btn-success" onclick="submitVote()">📤 提交投票</button>
+    </div>
+  </div>
+
+  <!-- 投票结果 -->
+  <div id="results-tab" class="result-section">
+    <div id="resultsDisplay"></div>
+    <div class="btn-group">
+      <button class="btn btn-primary" onclick="exportResults()">📥 导出结果</button>
+      <button class="btn btn-secondary" onclick="clearAll()">🗑️ 清空投票</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let pollData = JSON.parse(localStorage.getItem('pollData')) || null;
+let hasVoted = localStorage.getItem('hasVoted') === 'true';
+
+function showTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id$="-tab"]').forEach(s => s.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById(tab + '-tab').classList.add('active');
+
+  if (tab === 'vote') renderPoll();
+  if (tab === 'results') renderResults();
+}
+
+function addOption() {
+  const list = document.getElementById('optionsList');
+  const count = list.children.length + 1;
+  const div = document.createElement('div');
+  div.className = 'option-row';
+  div.innerHTML = `<input type="text" placeholder="选项 ${count}" class="option-input"><button class="btn btn-remove" onclick="removeOption(this)">删除</button>`;
+  list.appendChild(div);
+}
+
+function removeOption(btn) {
+  if (document.querySelectorAll('.option-row').length > 2) btn.parentElement.remove();
+}
+
+function createPoll() {
+  const question = document.getElementById('pollQuestion').value.trim();
+  const inputs = document.querySelectorAll('.option-input');
+  const options = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+
+  if (!question) return showAlert('alert', '请输入投票问题', 'error');
+  if (options.length < 2) return showAlert('alert', '至少需要两个选项', 'error');
+
+  pollData = { question, options: options.map((text, i) => ({ id: i, text, votes: 0 })), createdAt: new Date().toISOString() };
+  hasVoted = false;
+  localStorage.setItem('pollData', JSON.stringify(pollData));
+  localStorage.removeItem('hasVoted');
+
+  document.getElementById('pollQuestion').value = '';
+  document.getElementById('optionsList').innerHTML = `
+    <div class="option-row"><input type="text" placeholder="选项 1" class="option-input"></div>
+    <div class="option-row"><input type="text" placeholder="选项 2" class="option-input"></div>`;
+
+  showAlert('alert', '✅ 投票创建成功！切换到"参与投票"即可投票', '');
+  setTimeout(() => showTabDirect('vote'), 500);
+}
+
+function showTabDirect(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id$="-tab"]').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => { if (t.textContent.includes(tab === 'create' ? '创建' : tab === 'vote' ? '参与' : '结果')) t.classList.add('active'); });
+  document.getElementById(tab + '-tab').classList.add('active');
+  if (tab === 'vote') renderPoll();
+  if (tab === 'results') renderResults();
+}
+
+function renderPoll() {
+  if (!pollData) {
+    document.getElementById('pollDisplay').innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>还没有创建投票</p></div>';
+    return;
+  }
+  let html = `<h2 style="margin-bottom:18px;color:#333;font-size:20px;">${pollData.question}</h2>`;
+  if (hasVoted) html += '<div class="alert">您已投过票了</div>';
+  html += '<div id="voteOptions">';
+  pollData.options.forEach((opt, i) => {
+    html += `<label class="vote-option ${hasVoted ? 'selected' : ''}" onclick="selectOption(this, ${i})">
+      <input type="radio" name="vote" value="${i}" ${hasVoted ? 'disabled' : ''}>
+      <span>${opt.text}</span>
+    </label>`;
+  });
+  html += '</div>';
+  document.getElementById('pollDisplay').innerHTML = html;
+  document.getElementById('voteAlert').innerHTML = hasVoted ? '<div class="alert">✅ 您已投票</div>' : '';
+}
+
+function selectOption(el, idx) {
+  if (hasVoted) return;
+  document.querySelectorAll('.vote-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  el.querySelector('input').checked = true;
+}
+
+function submitVote() {
+  if (hasVoted) return showAlert('voteAlert', '您已经投过票了', 'error');
+  if (!pollData) return showAlert('voteAlert', '请先创建投票', 'error');
+  const checked = document.querySelector('input[name="vote"]:checked');
+  if (!checked) return showAlert('voteAlert', '请选择一个选项', 'error');
+
+  pollData.options[+checked.value].votes++;
+  hasVoted = true;
+  localStorage.setItem('pollData', JSON.stringify(pollData));
+  localStorage.setItem('hasVoted', 'true');
+  showAlert('voteAlert', '✅ 投票成功！', '');
+  renderPoll();
+  setTimeout(() => { showTabDirect('results'); }, 600);
+}
+
+function renderResults() {
+  if (!pollData) {
+    document.getElementById('resultsDisplay').innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>暂无投票数据</p></div>';
+    return;
+  }
+  const total = pollData.options.reduce((s, o) => s + o.votes, 0);
+  let html = `<h2 style="margin-bottom:18px;color:#333;font-size:20px;">📊 ${pollData.question}</h2>`;
+  html += '<div class="total-votes">总票数：' + total + ' 票</div>';
+
+  const sorted = [...pollData.options].sort((a, b) => b.votes - a.votes);
+  const maxVotes = sorted.length > 0 ? sorted[0].votes : 0;
+
+  sorted.forEach(opt => {
+    const pct = total > 0 ? ((opt.votes / total) * 100).toFixed(1) : 0;
+    const isTop = opt.votes === maxVotes && maxVotes > 0;
+    html += `<div class="result-bar ${isTop ? 'highlight' : ''}">
+      <div class="result-label">
+        <span>${isTop ? '🏆 ' : ''}${opt.text}</span>
+        <span>${opt.votes} 票 (${pct}%)</span>
+      </div>
+      <div class="bar-bg">
+        <div class="bar-fill ${pct > 20 ? 'light-text' : 'dark-text'}" style="width: ${total > 0 ? pct : 0}%">${pct > 8 ? pct + '%' : ''}</div>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('resultsDisplay').innerHTML = html;
+}
+
+function showAlert(id, msg, type) {
+  const div = document.getElementById(id);
+  if (!div) return;
+  div.className = type === 'error' ? 'alert alert-error' : 'alert';
+  div.textContent = msg;
+  if (type === 'error') setTimeout(() => { div.className = 'alert'; div.textContent = ''; }, 3000);
+}
+
+function exportResults() {
+  if (!pollData) return;
+  const total = pollData.options.reduce((s, o) => s + o.votes, 0);
+  let csv = '\uFEFF问题,选项,票数,占比\n';
+  pollData.options.forEach(opt => {
+    const pct = total > 0 ? ((opt.votes / total) * 100).toFixed(1) + '%' : '0%';
+    csv += `"${pollData.question}","${opt.text}",${opt.votes},${pct}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '投票结果.csv';
+  a.click();
+}
+
+function clearAll() {
+  if (!confirm('确定要清空所有投票数据吗？')) return;
+  pollData = null;
+  hasVoted = false;
+  localStorage.removeItem('pollData');
+  localStorage.removeItem('hasVoted');
+  document.getElementById('resultsDisplay').innerHTML = '<div class="empty-state"><div class="icon">🗑️</div><p>已清空</p></div>';
+}
+</script>
+</body>
+</html>
