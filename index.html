@@ -101,7 +101,7 @@ textarea { resize: vertical; min-height: 80px; }
       <input type="password" id="adminPassword" placeholder="管理密码" onkeypress="if(event.key==='Enter')checkPassword()">
       <button class="btn btn-primary" onclick="checkPassword()">确认</button>
       <div id="passwordMsg"></div>
-      <div class="password-hint">默认密码：admin123（可在代码中修改）</div>
+      <div class="password-hint">默认密码：admin123（投票结果无需密码即可查看）</div>
     </div>
   </div>
 
@@ -162,7 +162,8 @@ let hasVoted = localStorage.getItem('hasVoted') === 'true';
 let isAuthenticated = sessionStorage.getItem('isAuthenticated') === 'true';
 
 function showTab(tab) {
-  if (!isAuthenticated) {
+  // 查看结果不需要密码，其他功能需要验证
+  if (tab !== 'results' && !isAuthenticated) {
     showPasswordTab();
     return;
   }
@@ -245,7 +246,8 @@ function createPoll() {
 }
 
 function showTabDirect(tab) {
-  if (!isAuthenticated) {
+  // 查看结果不需要密码
+  if (tab !== 'results' && !isAuthenticated) {
     showPasswordTab();
     return;
   }
