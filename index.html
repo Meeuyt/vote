@@ -10,8 +10,13 @@ body { font-family: "Microsoft YaHei", Arial, sans-serif; background: #f0f2f5; p
 .container { max-width: 700px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 30px; }
 h1 { text-align: center; color: #1a73e8; margin-bottom: 25px; font-size: 28px; }
 
-.setup-section, .vote-section, .result-section { display: none; }
-.setup-section.active, .vote-section.active, .result-section.active { display: block; }
+.setup-section, .vote-section, .result-section, .password-section, .main-tabs { display: none; }
+.setup-section.active, .vote-section.active, .result-section.active, .password-section.active, .main-tabs.active { display: block; }
+.password-section { text-align: center; padding: 40px 20px; }
+.password-box { max-width: 400px; margin: 0 auto; }
+.password-box input { width: 100%; padding: 12px; font-size: 16px; border: 2px solid #d0d5dd; border-radius: 8px; margin-bottom: 15px; }
+.password-box .btn { width: 100%; padding: 12px; font-size: 16px; }
+.password-hint { color: #666; font-size: 14px; margin-top: 10px; }
 
 .form-group { margin-bottom: 15px; }
 label { display: block; margin-bottom: 6px; color: #333; font-weight: 500; font-size: 15px; }
@@ -89,14 +94,25 @@ textarea { resize: vertical; min-height: 80px; }
 <div class="container">
   <h1>🗳️ 在线投票系统</h1>
 
-  <div class="tabs">
-    <button class="tab active" onclick="showTab('create')">创建投票</button>
+  <!-- 密码验证 -->
+  <div id="password-tab" class="password-section active">
+    <div class="password-box">
+      <h2 style="margin-bottom:20px;color:#333;">🔐 请输入管理密码</h2>
+      <input type="password" id="adminPassword" placeholder="管理密码" onkeypress="if(event.key==='Enter')checkPassword()">
+      <button class="btn btn-primary" onclick="checkPassword()">确认</button>
+      <div id="passwordMsg"></div>
+      <div class="password-hint">默认密码：admin123（可在代码中修改）</div>
+    </div>
+  </div>
+
+  <div id="mainTabs" class="tabs main-tabs">
+    <button class="tab" onclick="showTab('create')">创建投票</button>
     <button class="tab" onclick="showTab('vote')">参与投票</button>
     <button class="tab" onclick="showTab('results')">投票结果</button>
   </div>
 
   <!-- 创建投票 -->
-  <div id="create-tab" class="setup-section active">
+  <div id="create-tab" class="setup-section">
     <div class="form-group">
       <label for="pollQuestion">投票问题</label>
       <input type="text" id="pollQuestion" placeholder="例如：你最喜欢的编程语言是？">
@@ -109,6 +125,10 @@ textarea { resize: vertical; min-height: 80px; }
       </div>
       <button class="btn btn-secondary" onclick="addOption()" style="margin-top:8px;">+ 添加选项</button>
     </div>
+    <div class="form-group">
+      <label for="votePasswordInput">投票密码（可选，留空则无需密码即可投票）</label>
+      <input type="text" id="votePasswordInput" placeholder="设置投票密码">
+    </div>
     <div class="btn-group">
       <button class="btn btn-primary" onclick="createPoll()">✅ 创建投票</button>
     </div>
@@ -116,6 +136,7 @@ textarea { resize: vertical; min-height: 80px; }
 
   <!-- 参与投票 -->
   <div id="vote-tab" class="vote-section">
+    <div id="votePasswordSection"></div>
     <div id="pollDisplay"></div>
     <div id="voteAlert"></div>
     <div class="btn-group">
@@ -134,17 +155,50 @@ textarea { resize: vertical; min-height: 80px; }
 </div>
 
 <script>
+const ADMIN_PASSWORD = 'admin123'; // 管理密码，可修改
+const VOTE_PASSWORD = ''; // 投票密码，留空表示不需要密码投票，可修改
 let pollData = JSON.parse(localStorage.getItem('pollData')) || null;
 let hasVoted = localStorage.getItem('hasVoted') === 'true';
+let isAuthenticated = sessionStorage.getItem('isAuthenticated') === 'true';
 
 function showTab(tab) {
+  if (!isAuthenticated) {
+    showPasswordTab();
+    return;
+  }
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('[id$="-tab"]').forEach(s => s.classList.remove('active'));
-  event.target.classList.add('active');
   document.getElementById(tab + '-tab').classList.add('active');
-
   if (tab === 'vote') renderPoll();
   if (tab === 'results') renderResults();
+}
+
+function showPasswordTab() {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('[id$="-tab"]').forEach(s => s.classList.remove('active'));
+  document.getElementById('password-tab').classList.add('active');
+}
+
+function checkPassword() {
+  const input = document.getElementById('adminPassword');
+  const msg = document.getElementById('passwordMsg');
+  if (input.value === ADMIN_PASSWORD) {
+    isAuthenticated = true;
+    sessionStorage.setItem('isAuthenticated', 'true');
+    msg.className = 'alert';
+    msg.textContent = '✅ 验证成功！';
+    input.value = '';
+    document.getElementById('password-tab').classList.remove('active');
+    document.getElementById('mainTabs').classList.add('active');
+    document.getElementById('create-tab').classList.add('active');
+    setTimeout(() => {
+      msg.textContent = '';
+    }, 500);
+  } else {
+    msg.className = 'alert alert-error';
+    msg.textContent = '❌ 密码错误！';
+    input.value = '';
+  }
 }
 
 function addOption() {
@@ -164,25 +218,37 @@ function createPoll() {
   const question = document.getElementById('pollQuestion').value.trim();
   const inputs = document.querySelectorAll('.option-input');
   const options = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+  const votePassword = document.getElementById('votePasswordInput').value.trim();
 
   if (!question) return showAlert('alert', '请输入投票问题', 'error');
   if (options.length < 2) return showAlert('alert', '至少需要两个选项', 'error');
 
-  pollData = { question, options: options.map((text, i) => ({ id: i, text, votes: 0 })), createdAt: new Date().toISOString() };
+  pollData = { 
+    question, 
+    options: options.map((text, i) => ({ id: i, text, votes: 0 })), 
+    createdAt: new Date().toISOString(),
+    votePassword: votePassword // 保存投票密码
+  };
   hasVoted = false;
   localStorage.setItem('pollData', JSON.stringify(pollData));
   localStorage.removeItem('hasVoted');
+  localStorage.removeItem('votePasswordVerified');
 
   document.getElementById('pollQuestion').value = '';
   document.getElementById('optionsList').innerHTML = `
     <div class="option-row"><input type="text" placeholder="选项 1" class="option-input"></div>
     <div class="option-row"><input type="text" placeholder="选项 2" class="option-input"></div>`;
+  document.getElementById('votePasswordInput').value = '';
 
   showAlert('alert', '✅ 投票创建成功！切换到"参与投票"即可投票', '');
   setTimeout(() => showTabDirect('vote'), 500);
 }
 
 function showTabDirect(tab) {
+  if (!isAuthenticated) {
+    showPasswordTab();
+    return;
+  }
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('[id$="-tab"]').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => { if (t.textContent.includes(tab === 'create' ? '创建' : tab === 'vote' ? '参与' : '结果')) t.classList.add('active'); });
@@ -197,6 +263,23 @@ function renderPoll() {
     return;
   }
   let html = `<h2 style="margin-bottom:18px;color:#333;font-size:20px;">${pollData.question}</h2>`;
+  
+  // 如果设置了投票密码，显示密码输入框
+  if (pollData.votePassword) {
+    const votePassVerified = localStorage.getItem('votePasswordVerified') === 'true';
+    if (!votePassVerified) {
+      html += `<div class="form-group" style="max-width:400px;">
+        <label>请输入投票密码</label>
+        <input type="password" id="votePasswordInput" placeholder="投票密码" onkeypress="if(event.key==='Enter')verifyVotePassword()">
+        <button class="btn btn-primary" onclick="verifyVotePassword()" style="margin-top:10px;">确认</button>
+        <div id="votePasswordMsg"></div>
+      </div>`;
+      document.getElementById('pollDisplay').innerHTML = html;
+      document.getElementById('voteAlert').innerHTML = '';
+      return;
+    }
+  }
+  
   if (hasVoted) html += '<div class="alert">您已投过票了</div>';
   html += '<div id="voteOptions">';
   pollData.options.forEach((opt, i) => {
@@ -208,6 +291,22 @@ function renderPoll() {
   html += '</div>';
   document.getElementById('pollDisplay').innerHTML = html;
   document.getElementById('voteAlert').innerHTML = hasVoted ? '<div class="alert">✅ 您已投票</div>' : '';
+}
+
+function verifyVotePassword() {
+  const input = document.getElementById('votePasswordInput');
+  const msg = document.getElementById('votePasswordMsg');
+  if (input.value === pollData.votePassword) {
+    localStorage.setItem('votePasswordVerified', 'true');
+    msg.className = 'alert';
+    msg.textContent = '✅ 验证成功！';
+    input.value = '';
+    setTimeout(() => renderPoll(), 300);
+  } else {
+    msg.className = 'alert alert-error';
+    msg.textContent = '❌ 密码错误！';
+    input.value = '';
+  }
 }
 
 function selectOption(el, idx) {
@@ -290,6 +389,7 @@ function clearAll() {
   hasVoted = false;
   localStorage.removeItem('pollData');
   localStorage.removeItem('hasVoted');
+  localStorage.removeItem('votePasswordVerified');
   document.getElementById('resultsDisplay').innerHTML = '<div class="empty-state"><div class="icon">🗑️</div><p>已清空</p></div>';
 }
 </script>
